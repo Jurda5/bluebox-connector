@@ -5,8 +5,67 @@ import json
 import time
 import PySimpleGUI as sg
 
+# TODO: read finish file and load all finished SI cards -> store in array, no duplicates
+# TODO: when a receive finish CN -> open finish file, load all SI cards in
 
-def update_rawsplits(comp_id, last_punch, filename):
+def update_finish(finished, finished_data, finish_file):
+
+    try:
+        file = open(finish_file,"r")
+        fin_content = file.read()
+        file.close()
+
+    except:
+        terminal_text = 'Cannot read from finish file'
+        return terminal_text, finished, finished_data
+
+    real_fins = []
+    fin_lines = fin_content.split('\n')
+    for line in fin_lines:
+        if len(line) > 2:
+            real_fins.append(int(line.split(':')[0]))
+
+    new_finishes = ""
+    unread_fins = 0
+    for i in range(len(finished)):
+        if finished[i] not in real_fins:
+            new_finishes += finished_data[i]
+            unread_fins += 1
+
+    if len(new_finishes) > 0:
+
+        try:
+            file = open(finish_file,"a+")
+            file.write(new_finishes)
+            file.close()
+            terminal_text = "Finish file updated with " + str(unread_fins) + " unread results"
+            return terminal_text, finished, finished_data
+
+        except:
+
+            terminal_text = 'Cannot write into finish file'
+            return terminal_text, finished, finished_data
+
+    else:
+        return "", finished, finished_data
+
+def update_finish2(new_finishes, finish_file):
+
+    try:
+        file = open(finish_file,"a+")
+        file.write(''.join(new_finishes))
+        file.close()
+        terminal_text = "Finish file updated with " + str(len(new_finishes)) + " new results"
+        return terminal_text
+
+    except:
+
+        terminal_text = 'Cannot write into finish file'
+        return terminal_text
+
+
+
+def update_rawsplits(comp_id, last_punch, filename, finish_file, finish_code, finished, finished_data):
 
     rawsplitsURL = "http://lpu.cz/bluebox/api/punch/rawsplits.php"
     
@@ -17,20 +76,38 @@ def update_rawsplits(comp_id, last_punch, filename):
 
     if last_punch == new_last_punch:
         # new_terminal_text = 'No new punches -> last_punch: ' + str(last_punch)
-        return last_punch, new_terminal_text
-        
+        new_terminal_text, finished, finished_data = update_finish(finished=finished, finished_data=finished_data, finish_file=finish_file)
+        return last_punch, new_terminal_text, finished, finished_data
+
+    # new_finishes = []
+    for record in response.text.split('\n'):
+        if len(record) > 2:
+            tmp = record.split('/')
+            CN = int(tmp[0].split(':')[1])
+            if CN == finish_code:
+                line = tmp[0].split(':')[0] + ": FIN/" + tmp[1] + "000/O.K.\n"
+                finished.append(int(tmp[0].split(':')[0]))
+                finished_data.append(line)
+                # new_finishes.append(line)
+
     try:
         file = open(filename,"a+")
         file.write(response.text)
         file.close()
         new_terminal_text = 'New ' + str(new_last_punch-last_punch) + ' splits received -> Last punch ID: ' + str(new_last_punch)
         
-        return new_last_punch, new_terminal_text
+        fin_terminal_text, finished, finished_data = update_finish(finished=finished, finished_data=finished_data, finish_file=finish_file)
+
+        new_terminal_text += "\n" + fin_terminal_text
+        # if len(new_finishes) > 0:
+        #     new_terminal_text += "\n" + update_finish2(new_finishes=new_finishes, finish_file=finish_file)
+
+        return new_last_punch, new_terminal_text, finished, finished_data
 
     except:
 
         new_terminal_text = 'Cannot write into rawsplits file'
-        return last_punch, new_terminal_text
+        return last_punch, new_terminal_text, finished, finished_data
 
 def main_window():
 
@@ -39,6 +116,8 @@ def main_window():
     comp_id = None
     last_punch = 0
     running = False
+    finished = []
+    finished_data = []
 
     DEFAULT_INFO_TEXT = " " * 60
     TERMINAL_TEXT = ""
@@ -51,10 +130,18 @@ def main_window():
         sg.FileBrowse("..."),
     ]
 
+    finish_file_row = [
+        sg.Text("Finish file:"),
+        sg.In(size=(53, 1), enable_events=True, key="-FINISH-FILE-"),
+        sg.FileBrowse("..."),
+    ]
+
     refresh_time_setter = [
-        sg.Text("Bluebox Comp. ID:"),
+        sg.Text("BB Comp. ID:"),
         sg.In(size=(4, 1), enable_events=True, key="-COMP-ID-"),
-        sg.Text("Refresh time [s]:"),
+        sg.Text("        Finish CN:"),
+        sg.Spin(initial_value=2, size=(4, 1), enable_events=True, key="-FINISH-CN-", values=[i for i in range(1, 300)]),
+        sg.Text("        Refresh [s]:"),
         sg.Spin(initial_value=refresh_t, size=(4, 1), enable_events=True, key="-REFRESH-TIME-", values=[i for i in range(1, 60)])
     ]
 
@@ -71,7 +158,7 @@ def main_window():
         sg.Button(" START ", enable_events=True, key="-START-STOP-")
     ]
 
-    layout = [file_setter_row, refresh_time_setter, text_row, terminal_row, action_button]
+    layout = [refresh_time_setter, file_setter_row, finish_file_row, text_row, terminal_row, action_button]
 
     icon_path = None # "C:/Users/janju/ownCloud/school/CVUT/bluebox/codes/bluebox-connector/bb-icon.png"
 
@@ -93,24 +180,28 @@ def main_window():
 
                 # TODO: Check of the values
 
-                if not values["-FILE-"] or not values["-COMP-ID-"]:
+                if not values["-FILE-"] or not values["-COMP-ID-"] or not values["-FINISH-FILE-"]:
                     
                     running = not running
 
-                    window["-INFO-TEXT-"].update("RawSplits file or Comp. ID is empty!", text_color='red')
+                    window["-INFO-TEXT-"].update("Missing values!", text_color='red')
 
                 else:
                     filename = values["-FILE-"]
+                    finish_file = values["-FINISH-FILE-"]
+                    finish_code = values["-FINISH-CN-"]
                     refresh_t = int(values["-REFRESH-TIME-"])
                     comp_id = int(values["-COMP-ID-"])
 
                     window["-START-STOP-"].update(" STOP ")
                     window["-FILE-"].update(disabled=True)
+                    window["-FINISH-FILE-"].update(disabled=True)
                     window["-REFRESH-TIME-"].update(disabled=True)
                     window["-COMP-ID-"].update(disabled=True)
+                    window["-FINISH-CN-"].update(disabled=True)
                     window["-STATE-INDICATOR-"].update(" RUNNING ", text_color=None, background_color='green')
                     
-                    last_punch, new_ter_line = update_rawsplits(comp_id=comp_id, last_punch=last_punch, filename=filename)
+                    last_punch, new_ter_line, finished, finished_data = update_rawsplits(comp_id=comp_id, last_punch=last_punch, filename=filename, finish_file=finish_file, finish_code=finish_code, finished=finished, finished_data=finished_data)
             
                     if new_ter_line:
                         TERMINAL_TEXT = new_ter_line + "\n" + TERMINAL_TEXT
@@ -119,8 +210,10 @@ def main_window():
             else:
                 window["-START-STOP-"].update(" START ")
                 window["-FILE-"].update(disabled=False)
+                window["-FINISH-FILE-"].update(disabled=False)
                 window["-REFRESH-TIME-"].update(disabled=False)
                 window["-COMP-ID-"].update(disabled=False)
+                window["-FINISH-CN-"].update(disabled=False)
                 window["-INFO-TEXT-"].update(DEFAULT_INFO_TEXT)
                 window["-STATE-INDICATOR-"].update(" STOPPED ", text_color=None, background_color='red')
 
@@ -131,7 +224,7 @@ def main_window():
 
 
         if running and (time.time()-start_time) > refresh_t:
-            last_punch, new_ter_line = update_rawsplits(comp_id=comp_id, last_punch=last_punch, filename=filename)
+            last_punch, new_ter_line, finished, finished_data = update_rawsplits(comp_id=comp_id, last_punch=last_punch, filename=filename, finish_file=finish_file, finish_code=finish_code, finished=finished, finished_data=finished_data)
             if new_ter_line:
                 TERMINAL_TEXT = new_ter_line + "\n" + TERMINAL_TEXT
                 window["-TERMINAL-"].update(TERMINAL_TEXT)
