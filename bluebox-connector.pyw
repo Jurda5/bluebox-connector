@@ -67,10 +67,10 @@ def update_finish2(new_finishes, finish_file):
 
 def update_rawsplits(comp_id, last_punch, filename, finish_file, finish_code, finished, finished_data):
 
-    rawsplitsURL = "http://lpu.cz/bluebox/api/punch/rawsplits.php"
+    rawsplitsURL = "http://bluebox.oresults.eu/api/punch/rawsplits.php"
     
     response = requests.get(rawsplitsURL, json={"comp_id": comp_id, "last_punch": last_punch})
-
+    
     new_last_punch = int(response.headers['last-punch'])
     new_terminal_text = ""
 
@@ -137,12 +137,17 @@ def main_window():
     ]
 
     refresh_time_setter = [
-        sg.Text("BB Comp. ID:"),
+        sg.Text("Bluebox comp. ID:"),
         sg.In(size=(4, 1), enable_events=True, key="-COMP-ID-"),
         sg.Text("        Finish CN:"),
         sg.Spin(initial_value=2, size=(4, 1), enable_events=True, key="-FINISH-CN-", values=[i for i in range(1, 300)]),
         sg.Text("        Refresh [s]:"),
         sg.Spin(initial_value=refresh_t, size=(4, 1), enable_events=True, key="-REFRESH-TIME-", values=[i for i in range(1, 60)])
+    ]
+
+    last_punch_row = [
+        sg.Text("Last punch ID:"),
+        sg.Spin(initial_value=0, size=(6, 1), enable_events=True, key="-LAST-PUNCH-", values=[i for i in range(1, 100000)])
     ]
 
     text_row = [
@@ -158,7 +163,7 @@ def main_window():
         sg.Button(" START ", enable_events=True, key="-START-STOP-")
     ]
 
-    layout = [refresh_time_setter, file_setter_row, finish_file_row, text_row, terminal_row, action_button]
+    layout = [refresh_time_setter, last_punch_row, file_setter_row, finish_file_row, text_row, terminal_row, action_button]
 
     icon_path = None # "C:/Users/janju/ownCloud/school/CVUT/bluebox/codes/bluebox-connector/bb-icon.png"
 
@@ -192,6 +197,7 @@ def main_window():
                     finish_code = values["-FINISH-CN-"]
                     refresh_t = int(values["-REFRESH-TIME-"])
                     comp_id = int(values["-COMP-ID-"])
+                    last_punch = int(values["-LAST-PUNCH-"])
 
                     window["-START-STOP-"].update(" STOP ")
                     window["-FILE-"].update(disabled=True)
@@ -200,9 +206,12 @@ def main_window():
                     window["-COMP-ID-"].update(disabled=True)
                     window["-FINISH-CN-"].update(disabled=True)
                     window["-STATE-INDICATOR-"].update(" RUNNING ", text_color=None, background_color='green')
-                    
+                    window["-LAST-PUNCH-"].update(disabled=True)
+
                     last_punch, new_ter_line, finished, finished_data = update_rawsplits(comp_id=comp_id, last_punch=last_punch, filename=filename, finish_file=finish_file, finish_code=finish_code, finished=finished, finished_data=finished_data)
             
+                    window["-LAST-PUNCH-"].update(value=last_punch)
+
                     if new_ter_line:
                         TERMINAL_TEXT = new_ter_line + "\n" + TERMINAL_TEXT
                         window["-TERMINAL-"].update(TERMINAL_TEXT)
@@ -214,6 +223,7 @@ def main_window():
                 window["-REFRESH-TIME-"].update(disabled=False)
                 window["-COMP-ID-"].update(disabled=False)
                 window["-FINISH-CN-"].update(disabled=False)
+                window["-LAST-PUNCH-"].update(disabled=False)
                 window["-INFO-TEXT-"].update(DEFAULT_INFO_TEXT)
                 window["-STATE-INDICATOR-"].update(" STOPPED ", text_color=None, background_color='red')
 
@@ -225,9 +235,13 @@ def main_window():
 
         if running and (time.time()-start_time) > refresh_t:
             last_punch, new_ter_line, finished, finished_data = update_rawsplits(comp_id=comp_id, last_punch=last_punch, filename=filename, finish_file=finish_file, finish_code=finish_code, finished=finished, finished_data=finished_data)
+            
+            window["-LAST-PUNCH-"].update(value=last_punch)
+            
             if new_ter_line:
                 TERMINAL_TEXT = new_ter_line + "\n" + TERMINAL_TEXT
                 window["-TERMINAL-"].update(TERMINAL_TEXT)
+            
             start_time = time.time()
 
     window.close()
