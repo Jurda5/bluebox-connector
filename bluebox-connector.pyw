@@ -16,7 +16,7 @@ def update_finish(finished, finished_data, finish_file):
         file.close()
 
     except:
-        terminal_text = 'Cannot read from finish file'
+        terminal_text = 'WARNING: Cannot read from finish file'
         return terminal_text, finished, finished_data
 
     real_fins = []
@@ -38,12 +38,12 @@ def update_finish(finished, finished_data, finish_file):
             file = open(finish_file,"a+")
             file.write(new_finishes)
             file.close()
-            terminal_text = "Finish file updated with " + str(unread_fins) + " unread results"
+            terminal_text = "INFO: Finish file updated with " + str(unread_fins) + " unread results"
             return terminal_text, finished, finished_data
 
         except:
 
-            terminal_text = 'Cannot write into finish file'
+            terminal_text = 'WARNING: Cannot write into finish file'
             return terminal_text, finished, finished_data
 
     else:
@@ -94,11 +94,13 @@ def update_rawsplits(comp_id, last_punch, filename, finish_file, finish_code, fi
         file = open(filename,"a+")
         file.write(response.text)
         file.close()
-        new_terminal_text = 'New ' + str(new_last_punch-last_punch) + ' splits received -> Last punch ID: ' + str(new_last_punch)
+        new_terminal_text = 'INFO: New ' + str(new_last_punch-last_punch) + ' splits received'
         
         fin_terminal_text, finished, finished_data = update_finish(finished=finished, finished_data=finished_data, finish_file=finish_file)
 
-        new_terminal_text += "\n" + fin_terminal_text
+        if fin_terminal_text:
+            new_terminal_text += "\n" + fin_terminal_text
+            
         # if len(new_finishes) > 0:
         #     new_terminal_text += "\n" + update_finish2(new_finishes=new_finishes, finish_file=finish_file)
 
@@ -106,7 +108,7 @@ def update_rawsplits(comp_id, last_punch, filename, finish_file, finish_code, fi
 
     except:
 
-        new_terminal_text = 'Cannot write into rawsplits file'
+        new_terminal_text = 'WARNING: Cannot write into rawsplits file'
         return last_punch, new_terminal_text, finished, finished_data
 
 def main_window():
