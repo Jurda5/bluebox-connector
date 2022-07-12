@@ -133,7 +133,12 @@ def update_rawsplits(window, comp_id, last_punch, filename):
 
     new_splits = 0
 
-    rawsplits_str, new_last_punch = get_rawsplits(comp_id, last_punch)
+    try:
+        rawsplits_str, new_last_punch = get_rawsplits(comp_id, last_punch)
+    
+    except:
+        window_terminal(window, 'Cannot download rawsplits from server', 'WARN')
+        return last_punch
 
     if last_punch == new_last_punch:
         return last_punch
